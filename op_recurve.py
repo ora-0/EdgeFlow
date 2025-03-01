@@ -11,7 +11,7 @@ class RecurveOP(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     bl_description = "description"
 
-    resolution = 5
+    resolution = 3
 
     def execute(self, context):
         self.report({'INFO'}, f"Recurve operation started {self.resolution}")
@@ -23,6 +23,8 @@ class RecurveOP(bpy.types.Operator):
         selected_edges = [e for e in self.bm.edges if e.select]
         if len(selected_edges) == 0:
             return {'FINISHED'}
+
+        bpy.ops.ed.undo_push(message="Recurve")
 
         endpoint_edges = []
         for edge in selected_edges:
@@ -38,7 +40,7 @@ class RecurveOP(bpy.types.Operator):
         starting_edge = endpoint_edges[0] if len(endpoint_edges) > 0 else selected_edges[0]
         self.edge_loop, self.is_cyclic = find_edge_loop(starting_edge, selected_edges)
         verts = verts_of_edge_loop(self.edge_loop)
-        points = [vert.co for vert in verts]
+        self.intial_points = [vert.co.copy() for vert in verts]
         self.inital_vert_positions = { vert.index: vert.co.copy().freeze() for vert in verts }
 
         curve_data = bpy.data.curves.new(name="RecurveCurve", type='CURVE')
@@ -46,44 +48,58 @@ class RecurveOP(bpy.types.Operator):
         curve_data.resolution_u = 12
 
         self.curve = curve_data.splines.new('BEZIER')
+        self.curve_obj = bpy.data.objects.new("RecurveCurveObj", curve_data)
+        bpy.context.collection.objects.link(self.curve_obj)
+        self.curve_obj.location = self.obj.location
+
+        bpy.context.view_layer.objects.active = self.curve_obj
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        self.update_curve_with_resolution()
+        self.map_onto_spline()
+
+        return {'RUNNING_MODAL'}
+
+    def update_curve_with_resolution(self):
+        self.curve_obj.data.splines.clear()
+
+        self.curve = self.curve_obj.data.splines.new('BEZIER')
         self.curve.bezier_points.add(self.resolution - 1)
         self.curve.use_cyclic_u = self.is_cyclic
 
-        knot_coords = points_along_linear_spline(points, self.is_cyclic, self.resolution)
+        knot_coords = points_along_linear_spline(self.intial_points, self.is_cyclic, self.resolution)
         for point, knot_co in zip(self.curve.bezier_points, knot_coords):
             point.co = knot_co
             point.handle_left_type = 'AUTO'
             point.handle_right_type = 'AUTO'
 
-        self.curve_obj = bpy.data.objects.new("RecurveCurveObj", curve_data)
-        bpy.context.collection.objects.link(self.curve_obj)
 
-        self.curve_obj.location = self.obj.location
-
-        bpy.context.view_layer.objects.active = self.curve_obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        self.map_onto_spline()
-
-        return {'RUNNING_MODAL'}
-
+    state = 'CHOOSING_RESOLUTION'
     def modal(self, context, event):
-        # context.area.tag_redraw()
+        if self.state == 'CHOOSING_RESOLUTION':
+            return self.choose_resolution(event)
+        elif self.state == 'RECURVE':
+            return self.recurve(event)
 
+    def restore(self):
+        for vert_index, vert_co in self.inital_vert_positions.items():
+            self.bm.verts[vert_index].co = vert_co
+        bmesh.update_edit_mesh(self.obj.data)
+    
+    def recurve(self, event):
         if event.type in {'ESC'}:
-            for vert_index, vert_co in self.inital_vert_positions.items():
-                self.bm.verts[vert_index].co = vert_co
-            bmesh.update_edit_mesh(self.obj.data)
+            self.restore()
 
             bpy.context.view_layer.objects.active = self.obj
             bpy.ops.object.mode_set(mode='EDIT')
-            bpy.data.objects.remove(self.curve_obj)
+            bpy.data.curves.remove(self.curve_obj.data)
             self.bm.free()
             return {'CANCELLED'}
         elif event.type in {'RET', 'TAB'}:
             self.map_onto_spline()
             bpy.context.view_layer.objects.active = self.obj
             bpy.ops.object.mode_set(mode='EDIT')
-            bpy.data.objects.remove(self.curve_obj)
+            bpy.data.curves.remove(self.curve_obj.data)
             self.bm.free()
             return {'FINISHED'}
         elif event.type in {'MOUSEMOVE', 'LEFTMOUSE'}:
@@ -94,6 +110,30 @@ class RecurveOP(bpy.types.Operator):
             return {'PASS_THROUGH'}
     
         return {'FINISHED'}
+
+    def choose_resolution(self, event):
+        if event.type in {'ESC', 'RIGHTMOUSE'}:
+            self.restore()
+            bpy.context.view_layer.objects.active = self.obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.data.curves.remove(self.curve_obj.data)
+            return {'CANCELLED'}
+        elif event.type in {'RET', 'LEFTMOUSE'}:
+            self.state = 'RECURVE'
+            return {'RUNNING_MODAL'}
+        elif event.type in {'WHEELUPMOUSE', 'NUMPAD_PLUS', 'EQUAL'} and event.value == 'PRESS':
+            self.resolution += 1
+            self.update_curve_with_resolution()
+            self.map_onto_spline()
+            return {'RUNNING_MODAL'}
+        elif event.type in {'WHEELDOWNMOUSE','NUMPAD_MINUS', 'MINUS'} and event.value == 'PRESS':
+            minimum = 3 if self.is_cyclic else 2
+            self.resolution = max(self.resolution - 1, minimum)
+            self.update_curve_with_resolution()
+            self.map_onto_spline()
+            return {'RUNNING_MODAL'}
+        else:
+            return {'PASS_THROUGH'}
 
 
     def bezier_to_linear_spline(self, resolution):
@@ -117,26 +157,6 @@ class RecurveOP(bpy.types.Operator):
         for vert, point in zip(verts, points):
             vert.co = point
         bmesh.update_edit_mesh(self.obj.data)
-
-
-    def choose_resolution(self, event):
-        if event.type in {'ESC', 'RIGHTMOUSE'}:
-            self.report({'INFO'}, "Recurve operation cancelled")
-            bpy.types.SpaceView3D.draw_handler_remove(self.resolution_text, 'WINDOW')
-            return {'CANCELLED'}
-        elif event.type in {'RET', 'LEFTMOUSE'}:
-            self.report({'INFO'}, "Recurve operation finished")
-            bpy.types.SpaceView3D.draw_handler_remove(self.resolution_text, 'WINDOW')
-            self.state = 'RECURVE'
-            return {'RUNNING_MODAL'}
-        elif event.type in {'WHEELUPMOUSE', 'NUMPAD_PLUS', 'EQUAL'} and event.value == 'PRESS':
-            self.resolution += 1
-            return {'RUNNING_MODAL'}
-        elif event.type in {'WHEELDOWNMOUSE','NUMPAD_MINUS', 'MINUS'} and event.value == 'PRESS':
-            self.resolution = max(self.resolution - 1, 2)
-            return {'RUNNING_MODAL'}
-        else:
-            return {'PASS_THROUGH'}
         
 
 def verts_of_edge_loop(edge_loop):
