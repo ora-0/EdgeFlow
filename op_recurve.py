@@ -17,8 +17,8 @@ class RecurveOP(bpy.types.Operator):
         self.report({'INFO'}, f"Recurve operation started {self.resolution}")
         context.window_manager.modal_handler_add(self)
 
-        obj = context.active_object
-        self.bm = bmesh.from_edit_mesh(obj.data)
+        self.obj = context.active_object
+        self.bm = bmesh.from_edit_mesh(self.obj.data)
 
         selected_edges = [e for e in self.bm.edges if e.select]
         if len(selected_edges) == 0:
@@ -37,10 +37,10 @@ class RecurveOP(bpy.types.Operator):
 
         starting_edge = endpoint_edges[0] if len(endpoint_edges) > 0 else selected_edges[0]
         self.edge_loop, self.is_cyclic = find_edge_loop(starting_edge, selected_edges)
+        verts = verts_of_edge_loop(self.edge_loop)
+        points = [vert.co for vert in verts]
+        self.inital_vert_positions = { vert.index: vert.co.copy().freeze() for vert in verts }
 
-        points = [vert.co for vert in verts_of_edge_loop(self.edge_loop)]
-
-        # === curve creation ===
         curve_data = bpy.data.curves.new(name="RecurveCurve", type='CURVE')
         curve_data.dimensions = '3D'
         curve_data.resolution_u = 12
@@ -49,18 +49,16 @@ class RecurveOP(bpy.types.Operator):
         self.curve.bezier_points.add(self.resolution - 1)
         self.curve.use_cyclic_u = self.is_cyclic
 
-        # === adding points ===
         knot_coords = points_along_linear_spline(points, self.is_cyclic, self.resolution)
         for point, knot_co in zip(self.curve.bezier_points, knot_coords):
             point.co = knot_co
             point.handle_left_type = 'AUTO'
             point.handle_right_type = 'AUTO'
 
-        self.original_obj = context.view_layer.objects.active
         self.curve_obj = bpy.data.objects.new("RecurveCurveObj", curve_data)
         bpy.context.collection.objects.link(self.curve_obj)
 
-        self.curve_obj.location = self.original_obj.location
+        self.curve_obj.location = self.obj.location
 
         bpy.context.view_layer.objects.active = self.curve_obj
         bpy.ops.object.mode_set(mode='EDIT')
@@ -68,22 +66,25 @@ class RecurveOP(bpy.types.Operator):
 
         return {'RUNNING_MODAL'}
 
-
     def modal(self, context, event):
         # context.area.tag_redraw()
 
         if event.type in {'ESC'}:
-            self.report({'INFO'}, "Recurve operation cancelled TODO")
-            bpy.context.view_layer.objects.active = self.original_obj
+            for vert_index, vert_co in self.inital_vert_positions.items():
+                self.bm.verts[vert_index].co = vert_co
+            bmesh.update_edit_mesh(self.obj.data)
+
+            bpy.context.view_layer.objects.active = self.obj
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.data.objects.remove(self.curve_obj)
+            self.bm.free()
             return {'CANCELLED'}
         elif event.type in {'RET', 'TAB'}:
-            self.report({'INFO'}, "Recurve operation finished")
             self.map_onto_spline()
-            bpy.context.view_layer.objects.active = self.original_obj
+            bpy.context.view_layer.objects.active = self.obj
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.data.objects.remove(self.curve_obj)
+            self.bm.free()
             return {'FINISHED'}
         elif event.type in {'MOUSEMOVE', 'LEFTMOUSE'}:
             self.map_onto_spline()
@@ -115,7 +116,7 @@ class RecurveOP(bpy.types.Operator):
 
         for vert, point in zip(verts, points):
             vert.co = point
-        bmesh.update_edit_mesh(self.original_obj.data)
+        bmesh.update_edit_mesh(self.obj.data)
 
 
     def choose_resolution(self, event):
