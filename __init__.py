@@ -21,6 +21,7 @@ if "bpy" in locals():
     importlib.reload(op_set_edge_linear)
     importlib.reload(op_set_edge_curve)
     importlib.reload(op_set_vertex_curve)
+    importlib.reload(op_recurve)
 else:
     from . import (
         util,
@@ -30,6 +31,7 @@ else:
         op_set_edge_linear,
         op_set_edge_curve,
         op_set_vertex_curve,
+        op_recurve,
     )
 
     
@@ -100,6 +102,7 @@ class VIEW3D_MT_edit_mesh_set_flow(Menu):
         layout = self.layout
 
         mesh_select_mode = context.scene.tool_settings.mesh_select_mode[:3]
+        layout.operator(op_recurve.RecurveOP.bl_idname, text='Recurve')
         if mesh_select_mode == (True, False, False):
           layout.operator(op_set_vertex_curve.SetVertexCurveOp.bl_idname, text='Set Vertex Curve')
         elif mesh_select_mode == (False, True, False):
@@ -129,6 +132,7 @@ classes = [
     op_set_edge_linear.SetEdgeLinearOP,
     op_set_edge_curve.SetEdgeCurveOP,
     op_set_vertex_curve.SetVertexCurveOp,
+    op_recurve.RecurveOP,
     VIEW3D_MT_edit_mesh_set_flow,
 ]
 

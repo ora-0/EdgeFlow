@@ -1,6 +1,5 @@
 import numpy as np
 import math
-import mathutils
 
 
 def catmullrom(P0, P1, P2, P3, a, nPoints=100):
