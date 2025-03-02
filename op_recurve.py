@@ -87,7 +87,7 @@ class RecurveOP(bpy.types.Operator):
         bmesh.update_edit_mesh(self.obj.data)
     
     def recurve(self, event):
-        if event.type in {'ESC'}:
+        if event.type in {'ESC'} and event.value == 'PRESS':
             self.report({'INFO'}, f"Recurve operation cancelled")
             self.restore()
 
@@ -96,7 +96,7 @@ class RecurveOP(bpy.types.Operator):
             bpy.data.curves.remove(self.curve_obj.data)
             self.bm.free()
             return {'CANCELLED'}
-        elif event.type in {'RET', 'TAB'}:
+        elif event.type in {'RET', 'TAB'} and event.value == 'PRESS':
             self.report({'INFO'}, f"Recurve operation finished")
             self.map_onto_spline()
 
