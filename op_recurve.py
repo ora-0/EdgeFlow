@@ -3,7 +3,6 @@ import bpy
 import blf
 import bmesh
 import mathutils
-from bpy.props import BoolProperty, IntProperty
 from itertools import pairwise, chain
 
 class RecurveOP(bpy.types.Operator):
