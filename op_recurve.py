@@ -3,6 +3,7 @@ import bpy
 import blf
 import bmesh
 import mathutils
+from bpy.props import BoolProperty, IntProperty
 from itertools import pairwise, chain
 
 class RecurveOP(bpy.types.Operator):
@@ -12,9 +13,10 @@ class RecurveOP(bpy.types.Operator):
     bl_description = "description"
 
     resolution = 3
+    space_evenly = False
 
     def execute(self, context):
-        self.report({'INFO'}, f"Recurve operation started {self.resolution}")
+        self.report({'INFO'}, f"Choose Resolution")
         context.window_manager.modal_handler_add(self)
 
         self.obj = context.active_object
@@ -40,54 +42,53 @@ class RecurveOP(bpy.types.Operator):
         starting_edge = endpoint_edges[0] if len(endpoint_edges) > 0 else selected_edges[0]
         self.edge_loop, self.is_cyclic = find_edge_loop(starting_edge, selected_edges)
         verts = verts_of_edge_loop(self.edge_loop)
-        self.intial_points = [vert.co.copy() for vert in verts]
-        self.inital_vert_positions = { vert.index: vert.co.copy().freeze() for vert in verts }
 
-        curve_data = bpy.data.curves.new(name="RecurveCurve", type='CURVE')
-        curve_data.dimensions = '3D'
-        curve_data.resolution_u = 12
+        # these are just setup to be used in the future
+        self.initial_points = [vert.co.copy() for vert in verts]
+        self.initial_vert_positions = { vert.index: vert.co.copy().freeze() for vert in verts }
 
-        self.curve = curve_data.splines.new('BEZIER')
-        self.curve_obj = bpy.data.objects.new("RecurveCurveObj", curve_data)
-        bpy.context.collection.objects.link(self.curve_obj)
-        self.curve_obj.location = self.obj.location
+        cumulative_length = [0]
+        for a, b in pairwise(self.initial_points):
+            cumulative_length.append(math.dist(a, b) + cumulative_length[-1])
+        total_length = cumulative_length[-1]
+        self.percentage_along_edge_loop = [length / total_length for length in cumulative_length]
 
-        bpy.context.view_layer.objects.active = self.curve_obj
-        bpy.ops.object.mode_set(mode='EDIT')
+        def create_curve():
+            curve_data = bpy.data.curves.new(name="RecurveCurve", type='CURVE')
+            curve_data.dimensions = '3D'
+            curve_data.resolution_u = 12
 
-        self.update_curve_with_resolution()
-        self.map_onto_spline()
+            self.curve = curve_data.splines.new('BEZIER')
+            self.curve_obj = bpy.data.objects.new("RecurveCurveObj", curve_data)
+            bpy.context.collection.objects.link(self.curve_obj)
+            self.curve_obj.location = self.obj.location
 
+            bpy.context.view_layer.objects.active = self.curve_obj
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            self.update_curve_with_resolution()
+            self.map_onto_spline()
+        create_curve()
+        
         return {'RUNNING_MODAL'}
-
-    def update_curve_with_resolution(self):
-        self.curve_obj.data.splines.clear()
-
-        self.curve = self.curve_obj.data.splines.new('BEZIER')
-        self.curve.bezier_points.add(self.resolution - 1)
-        self.curve.use_cyclic_u = self.is_cyclic
-
-        knot_coords = points_along_linear_spline(self.intial_points, self.is_cyclic, self.resolution)
-        for point, knot_co in zip(self.curve.bezier_points, knot_coords):
-            point.co = knot_co
-            point.handle_left_type = 'AUTO'
-            point.handle_right_type = 'AUTO'
 
 
     state = 'CHOOSING_RESOLUTION'
     def modal(self, context, event):
         if self.state == 'CHOOSING_RESOLUTION':
+
             return self.choose_resolution(event)
         elif self.state == 'RECURVE':
             return self.recurve(event)
 
     def restore(self):
-        for vert_index, vert_co in self.inital_vert_positions.items():
+        for vert_index, vert_co in self.initial_vert_positions.items():
             self.bm.verts[vert_index].co = vert_co
         bmesh.update_edit_mesh(self.obj.data)
     
     def recurve(self, event):
         if event.type in {'ESC'}:
+            self.report({'INFO'}, f"Recurve operation cancelled")
             self.restore()
 
             bpy.context.view_layer.objects.active = self.obj
@@ -96,12 +97,18 @@ class RecurveOP(bpy.types.Operator):
             self.bm.free()
             return {'CANCELLED'}
         elif event.type in {'RET', 'TAB'}:
+            self.report({'INFO'}, f"Recurve operation finished")
             self.map_onto_spline()
+
             bpy.context.view_layer.objects.active = self.obj
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.data.curves.remove(self.curve_obj.data)
             self.bm.free()
             return {'FINISHED'}
+        elif event.type in {'M'} and event.value == 'PRESS':
+            self.space_evenly = not self.space_evenly
+            self.map_onto_spline()
+            return {'RUNNING_MODAL'}
         elif event.type in {'MOUSEMOVE', 'LEFTMOUSE'}:
             self.map_onto_spline()
             self.update = True
@@ -113,6 +120,7 @@ class RecurveOP(bpy.types.Operator):
 
     def choose_resolution(self, event):
         if event.type in {'ESC', 'RIGHTMOUSE'}:
+            self.report({'INFO'}, f"Recurve operation cancelled")
             self.restore()
             bpy.context.view_layer.objects.active = self.obj
             bpy.ops.object.mode_set(mode='EDIT')
@@ -120,6 +128,7 @@ class RecurveOP(bpy.types.Operator):
             return {'CANCELLED'}
         elif event.type in {'RET', 'LEFTMOUSE'}:
             self.state = 'RECURVE'
+            self.report({'INFO'}, f"Recurve")
             return {'RUNNING_MODAL'}
         elif event.type in {'WHEELUPMOUSE', 'NUMPAD_PLUS', 'EQUAL'} and event.value == 'PRESS':
             self.resolution += 1
@@ -134,6 +143,19 @@ class RecurveOP(bpy.types.Operator):
             return {'RUNNING_MODAL'}
         else:
             return {'PASS_THROUGH'}
+
+    def update_curve_with_resolution(self):
+        self.curve_obj.data.splines.clear()
+
+        self.curve = self.curve_obj.data.splines.new('BEZIER')
+        self.curve.bezier_points.add(self.resolution - 1)
+        self.curve.use_cyclic_u = self.is_cyclic
+
+        knot_coords = points_along_linear_spline(self.initial_points, self.is_cyclic, self.resolution)
+        for point, knot_co in zip(self.curve.bezier_points, knot_coords):
+            point.co = knot_co
+            point.handle_left_type = 'AUTO'
+            point.handle_right_type = 'AUTO'
 
 
     def bezier_to_linear_spline(self, resolution):
@@ -151,13 +173,18 @@ class RecurveOP(bpy.types.Operator):
 
     def map_onto_spline(self):
         points = self.bezier_to_linear_spline(12)
-        points = points_along_linear_spline(points, False, len(self.edge_loop) + 1)
         verts = verts_of_edge_loop(self.edge_loop)
+
+        if self.space_evenly:
+            points = points_along_linear_spline(points, False, len(self.edge_loop) + 1)
+        else:
+            points = points_on_percentage_of_linear_spline(points, self.percentage_along_edge_loop)
 
         for vert, point in zip(verts, points):
             vert.co = point
         bmesh.update_edit_mesh(self.obj.data)
         
+
 
 def verts_of_edge_loop(edge_loop):
     edge = edge_loop[0]
@@ -207,6 +234,30 @@ def points_along_linear_spline(points, is_cyclic, resolution) -> list[mathutils.
 
     return spaced_points
 
+
+def points_on_percentage_of_linear_spline(points, input_ts):
+    if len(points) < 2:
+        return []
+    
+    cumulative_length = [0]
+    for a, b in pairwise(points):
+        cumulative_length.append(math.dist(a, b) + cumulative_length[-1])
+    total_length = cumulative_length[-1]
+    spline_ts = [length / total_length for length in cumulative_length]
+
+    out_points = []
+    for input_t in input_ts:
+        for i, spline_t in enumerate(spline_ts):
+            if input_t <= spline_t:
+                print(input_t, spline_t)
+                spline_point_a = points[i-1]
+                spline_point_b = points[i]
+                t = (input_t - spline_ts[i-1]) / (spline_ts[i] - spline_ts[i-1])
+                out_points.append(spline_point_a.lerp(spline_point_b, t))
+                
+                break
+    return out_points
+    
 
 # returns edges in first return parameter, and if it is cyclic in the second return parameter
 def find_edge_loop(starting_edge, selected_edges) -> tuple[list, bool]:
