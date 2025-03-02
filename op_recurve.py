@@ -9,7 +9,7 @@ class RecurveOP(bpy.types.Operator):
     bl_idname = "mesh.recurve"
     bl_label = "Recurve"
     bl_options = {'REGISTER', 'UNDO'}
-    bl_description = "description"
+    bl_description = "Use a Bézier curve to guide selected edges"
 
     resolution = 3
     space_evenly = False
