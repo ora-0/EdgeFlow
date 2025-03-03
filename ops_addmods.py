@@ -1,5 +1,4 @@
 import bpy
-from bpy.props import IntProperty
 
 class ConformOp(bpy.types.Operator):
     bl_idname = "edit.conform_op"
