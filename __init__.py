@@ -22,6 +22,7 @@ if "bpy" in locals():
     importlib.reload(op_set_edge_curve)
     importlib.reload(op_set_vertex_curve)
     importlib.reload(op_recurve)
+    importlib.reload(op_relax_mesh)
     importlib.reload(ops_addmods)
 else:
     from . import (
@@ -33,9 +34,9 @@ else:
         op_set_edge_curve,
         op_set_vertex_curve,
         op_recurve,
+        op_relax_mesh,
         ops_addmods,
     )
-
     
 
 import bpy
@@ -106,6 +107,7 @@ class VIEW3D_MT_edit_mesh_set_flow(Menu):
 
         mesh_select_mode = context.scene.tool_settings.mesh_select_mode[:3]
         layout.operator(op_recurve.RecurveOP.bl_idname, text='Recurve')
+        layout.operator(op_relax_mesh.RelaxMeshOP.bl_idname, text='Relax Mesh')
         layout.operator(ops_addmods.ConformOp.bl_idname, text='Conform')
         layout.operator(ops_addmods.LatticeDeformOp.bl_idname, text='Lattice Deform')
         if mesh_select_mode == (True, False, False):
@@ -138,6 +140,7 @@ classes = [
     op_set_edge_curve.SetEdgeCurveOP,
     op_set_vertex_curve.SetVertexCurveOp,
     op_recurve.RecurveOP,
+    op_relax_mesh.RelaxMeshOP,
     ops_addmods.ConformOp,
     ops_addmods.LatticeDeformOp,
     VIEW3D_MT_edit_mesh_set_flow,
@@ -145,6 +148,7 @@ classes = [
 
 def register():
     for c in classes:
+        print(c)
         bpy.utils.register_class(c)
 
     preferences = bpy.context.preferences.addons[__package__].preferences
