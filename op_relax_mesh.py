@@ -11,6 +11,8 @@ class RelaxMeshOP(bpy.types.Operator):
     repeat : IntProperty(name="Repeat", default=1, min=1, soft_max=100, description="Repeat the operation multiple times")
 
     def execute(self, context):
+        bpy.ops.ed.undo_push(message="Relax Mesh")
+
         bpy.ops.object.mode_set(mode='SCULPT')
         bpy.ops.paint.mask_flood_fill(mode='VALUE', value=1)
 
