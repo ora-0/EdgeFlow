@@ -39,29 +39,28 @@ class LatticeDeformOp(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        obj = context.active_object
-        if obj is None or obj.type != 'MESH': return {'CANCELLED'}
-        selected_verts = [v for v in obj.data.vertices if v.select]
-        if not selected_verts: return {'CANCELLED'}
-
         bpy.ops.object.mode_set(mode='OBJECT')
+        obj = context.active_object
+        if obj is None or obj.type != 'MESH':
+            bpy.ops.object.mode_set(mode='EDIT')
+            return {'CANCELLED'}
+        selected_verts = [v for v in obj.data.vertices if v.select]
+        if not selected_verts:
+            bpy.ops.object.mode_set(mode='EDIT')
+            return {'CANCELLED'}
+
         vertex_group = obj.vertex_groups.new(name="LatticeGroup")
         vertex_group.add([v.index for v in selected_verts], 1.0, 'ADD')
-    
 
         bpy.ops.object.add(type='LATTICE')
         lattice = context.active_object
         lattice.name = obj.name + "_lattice"
 
-        # bpy.ops.object.mode_set(mode='EDIT')
-        # bpy.ops.mesh.select_all(action='DESELECT')
-        # bpy.ops.object.mode_set(mode='OBJECT')
-        # obj.data.update()
-
         min_co = [min([v.co[i] for v in selected_verts]) for i in range(3)]
         max_co = [max([v.co[i] for v in selected_verts]) for i in range(3)]
         lattice.scale = [(max_co[i] - min_co[i]) for i in range(3)]
         lattice.location = [(max_co[i] + min_co[i]) / 2 for i in range(3)]
+        lattice.location += obj.location
 
         lattice_mod = obj.modifiers.new(name="LatticeDeform", type='LATTICE')
         lattice_mod.object = lattice
