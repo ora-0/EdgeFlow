@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import BoolProperty, FloatProperty, EnumProperty
+from bpy.props import BoolProperty
 import bmesh
 
 from . import util
