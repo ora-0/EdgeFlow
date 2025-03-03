@@ -1,7 +1,7 @@
 import bpy
 
 class ConformOp(bpy.types.Operator):
-    bl_idname = "edit.conform_op"
+    bl_idname = "mesh.conform_op"
     bl_label = "Conform"
     bl_description = "Adds a shrinkwrap modifier to a copy of this mesh"
     bl_options = {'REGISTER', 'UNDO'}
@@ -33,7 +33,7 @@ class ConformOp(bpy.types.Operator):
 
 
 class LatticeDeformOp(bpy.types.Operator):
-    bl_idname = "edit.lattice_deform_op"
+    bl_idname = "mesh.lattice_deform_op"
     bl_label = "Lattice Deform"
     bl_description = "Adds a lattice around the bounding box of the selected verts"
     bl_options = {'REGISTER', 'UNDO'}
