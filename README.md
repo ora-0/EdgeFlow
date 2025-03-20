@@ -73,9 +73,14 @@ The tool operates in the direction of the flow of the edgeloop, indicated by the
 ![grafik](https://github.com/BenjaminSauder/EdgeFlow/assets/13512160/f7e1690d-e852-4dec-bd40-956b470f94bf)
 
 
-**Mix:** Blend between intial vertex positions and the interpolated result  
-**Tension:** Controls the strengh of offset  
-**Use Rail:** The first and last edge of the edgeloop stay in place
+**Mix:** Blend between intial vertex positions and the interpolated result.     
+**Tension:** Controls the strengh of offset.     
+**Use Rail:** Customize the interpolation by using the first and last edge of the edgeloop to control the curvature.     
+**Rail Mode:** Switch rail mode between using absolute units or a factor of the length of the edge.     
+**Rail Start:** Choose how long the rail is at the start.     
+**Rail End:** Choose how long the rail is at the end.     
+
+   
 
 ### Set Vertex Curve:
 
@@ -92,7 +97,8 @@ So it's very important to select in the correct order.
 **Tension:** Controls the strengh of offset   
 **Use Topology Distance:** Force the path search to ignore edge lenghts, so only topological distance is used to find the inbetween vertices.   
 **Flip Half Circle:** (only for 2 vertices) Flip the direction of the half circle.  
-**Space evenly:** (only for 3 or more vertices) Place the vertices in even distances.  
+**Rotate Half Circle:** (only for 2 vertices) Rotate the half circle orthogonal to the intial orientation.     
+**Space evenly:** (only for 3 or more vertices) Place the vertices in even distances.       
 
 ## How Set Flow works
 
