@@ -1,5 +1,3 @@
-import math
-import time
 import bpy
 from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty
 import bmesh
