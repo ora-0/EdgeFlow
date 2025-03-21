@@ -30,6 +30,7 @@ class RelaxMeshOP(bpy.types.Operator):
         )
 
         bpy.ops.paint.mask_flood_fill(mode='VALUE', value=0)
+        bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.mode_set(mode='EDIT')
         return {'FINISHED'}
 
